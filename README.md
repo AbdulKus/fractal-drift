@@ -1,14 +1,26 @@
 # Fractal Drift
 
-A standalone WebGL2 navigator for infinite procedural 3D worlds.
+An interactive WebGL2 navigator for flying through procedural 3D worlds: Mandelbox, liminal rooms, lattices, organic tunnels, infinite pizza, a neon cathedral, Menger sponge, crystal fields, void rings, and custom GLSL distance fields.
 
 ## Controls
 
-- Desktop: WASD, mouse, Shift boost, Space/Ctrl vertical movement, F formula editor, 1–9 worlds.
-- Mobile: left joystick to move, drag the right side to look.
+- Desktop: `WASD` to move, mouse to look, `Shift` to boost, `F` for the formula editor.
+- Touch: left joystick to move, drag the world to look.
+- The graphics panel controls speed, draw distance, field of view, ray-march detail, shadows, and volumetric glow.
 
-No build step or dependencies are required. Open `index.html` directly or serve the directory with any static web server.
+## Development
+
+```bash
+npm ci
+npm run dev
+```
+
+The default build targets the OpenAI Sites/Vinext runtime:
+
+```bash
+npm run build
+```
 
 ## GitHub Pages
 
-The workflow in `.github/workflows/pages.yml` publishes the repository root to GitHub Pages on every push to `main`.
+The workflow in `.github/workflows/pages.yml` creates a static Next.js export and publishes it to GitHub Pages after every push to `main`. In repository settings, Pages must use **GitHub Actions** as its source.
