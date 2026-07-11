@@ -10,6 +10,7 @@ type Settings = {
   shadows: boolean;
   volumetric: boolean;
   bands: boolean;
+  rings: boolean;
 };
 
 type MobileMove = { pointerId: number | null; x: number; z: number };
@@ -42,6 +43,7 @@ uniform float uDetail;
 uniform float uShadows;
 uniform float uVolumetric;
 uniform float uBands;
+uniform float uRings;
 uniform int uWorld;
 uniform vec3 uCamera;
 uniform mat3 uRotation;
@@ -181,14 +183,18 @@ void main(){
   vec3 ro=uCamera;
   float focal=1.0/tan(radians(uFov)*.5);
   vec3 rd=normalize(uRotation*vec3(uv,focal));
-  float t=0.,glow=0.; int steps=int(mix(48.,112.,uDetail));
+  float t=0.,glow=0.;
+  int steps=int(mix(80.,160.,uDetail)*(1.-uRings)+mix(48.,112.,uDetail)*uRings);
+  float hitEpsilon=mix(.0032,.0015,uRings);
+  float marchScale=mix(.50,.72,uRings);
+  float minimumStep=mix(.004,.008,uRings);
   float d=0.;
-  for(int i=0;i<128;i++){
+  for(int i=0;i<176;i++){
     if(i>=steps) break;
     d=map(ro+rd*t);
     glow+=exp(-12.*abs(d))*.006;
-    if(abs(d)<.0015||t>uDistance) break;
-    t+=max(abs(d)*.72,.008);
+    if(abs(d)<hitEpsilon*(1.+t*.012)||t>uDistance) break;
+    t+=max(abs(d)*marchScale,minimumStep);
   }
   vec3 col=vec3(.002,.009,.009);
   if(t<uDistance){
@@ -248,7 +254,7 @@ function FractalCanvas({ world, settings, customExpression, mobileMoveRef, onSta
     gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
     const loc=gl.getAttribLocation(program,"position"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
     const uni=(name:string)=>gl.getUniformLocation(program,name);
-    const U={res:uni("uResolution"),time:uni("uTime"),fov:uni("uFov"),distance:uni("uDistance"),detail:uni("uDetail"),shadows:uni("uShadows"),vol:uni("uVolumetric"),bands:uni("uBands"),world:uni("uWorld"),camera:uni("uCamera"),rotation:uni("uRotation")};
+    const U={res:uni("uResolution"),time:uni("uTime"),fov:uni("uFov"),distance:uni("uDistance"),detail:uni("uDetail"),shadows:uni("uShadows"),vol:uni("uVolumetric"),bands:uni("uBands"),rings:uni("uRings"),world:uni("uWorld"),camera:uni("uCamera"),rotation:uni("uRotation")};
     let frame=0,last=performance.now(),fps=60,raf=0;
     const resize=()=>{ const dpr=Math.min(devicePixelRatio,stateRef.current.settings.detail>.7?1.7:1.25); const w=Math.floor(canvas.clientWidth*dpr),h=Math.floor(canvas.clientHeight*dpr); if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);} };
     const render=(now:number)=>{
@@ -260,7 +266,7 @@ function FractalCanvas({ world, settings, customExpression, mobileMoveRef, onSta
       const boost=s.keys.has("ShiftLeft")||s.keys.has("ShiftRight")?3:1, vel=s.settings.speed*.06*boost;
       for(let i=0;i<3;i++) s.pos[i]+=(forward[i]*mz+right[i]*mx+(i===1?my:0))*vel*dt;
       const mat=new Float32Array([right[0],right[1],right[2],up[0],up[1],up[2],forward[0],forward[1],forward[2]]);
-      gl.useProgram(program); gl.uniform2f(U.res,canvas.width,canvas.height); gl.uniform1f(U.time,now/1000); gl.uniform1f(U.fov,s.settings.fov); gl.uniform1f(U.distance,s.settings.distance); gl.uniform1f(U.detail,s.settings.detail); gl.uniform1f(U.shadows,s.settings.shadows?1:0); gl.uniform1f(U.vol,s.settings.volumetric?1:0); gl.uniform1f(U.bands,s.settings.bands?1:0); gl.uniform1i(U.world,s.world); gl.uniform3f(U.camera,s.pos[0],s.pos[1],s.pos[2]); gl.uniformMatrix3fv(U.rotation,false,mat); gl.drawArrays(gl.TRIANGLES,0,3);
+      gl.useProgram(program); gl.uniform2f(U.res,canvas.width,canvas.height); gl.uniform1f(U.time,now/1000); gl.uniform1f(U.fov,s.settings.fov); gl.uniform1f(U.distance,s.settings.distance); gl.uniform1f(U.detail,s.settings.detail); gl.uniform1f(U.shadows,s.settings.shadows?1:0); gl.uniform1f(U.vol,s.settings.volumetric?1:0); gl.uniform1f(U.bands,s.settings.bands?1:0); gl.uniform1f(U.rings,s.settings.rings?1:0); gl.uniform1i(U.world,s.world); gl.uniform3f(U.camera,s.pos[0],s.pos[1],s.pos[2]); gl.uniformMatrix3fv(U.rotation,false,mat); gl.drawArrays(gl.TRIANGLES,0,3);
       frame++; if(frame%20===0){fps=Math.round(1/Math.max(dt,.001));onStats(fps,s.pos,[s.pitch,s.yaw]);}
       raf=requestAnimationFrame(render);
     };
@@ -311,7 +317,7 @@ export default function Home() {
   const [formulaError,setFormulaError]=useState("");
   const [custom,setCustom]=useState(false);
   const [stats,setStats]=useState({fps:60,pos:[0,0,-4],rot:[0,0]});
-  const [settings,setSettings]=useState<Settings>({speed:12.4,distance:42,fov:70,detail:.66,shadows:true,volumetric:true,bands:true});
+  const [settings,setSettings]=useState<Settings>({speed:12.4,distance:42,fov:70,detail:.66,shadows:true,volumetric:true,bands:true,rings:true});
   const update=<K extends keyof Settings>(key:K,value:Settings[K])=>setSettings(s=>({...s,[key]:value}));
   const onStats=useCallback((fps:number,pos:number[],rot:number[])=>setStats({fps,pos:[...pos],rot:[...rot]}),[]);
   const compile=()=>{
@@ -356,7 +362,8 @@ export default function Home() {
       <div className="switches">
         <button onClick={()=>update("shadows",!settings.shadows)}><span>SHADOWS</span><i className={settings.shadows?"on":""}/></button>
         <button onClick={()=>update("volumetric",!settings.volumetric)}><span>VOLUMETRIC</span><i className={settings.volumetric?"on":""}/></button>
-        <button onClick={()=>update("bands",!settings.bands)}><span>DARK CONTOURS</span><i className={settings.bands?"on":""}/></button>
+        <button onClick={()=>update("bands",!settings.bands)}><span>SOFT LIGHTING</span><i className={settings.bands?"":"on"}/></button>
+        <button onClick={()=>update("rings",!settings.rings)}><span>RAY RINGS</span><i className={settings.rings?"on":""}/></button>
       </div>
       <button className="formula-trigger" onClick={()=>setFormulaOpen(true)}><span>ƒ</span><b>CUSTOM FORMULA</b><i>↗</i></button>
       <code className="formula-preview">{custom?compiled:WORLDS[world].formula}</code>
