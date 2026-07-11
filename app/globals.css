@@ -79,3 +79,8 @@
   .crosshair{display:none}
   .formula-editor,.panel-hidden .formula-editor,.hud-hidden .formula-editor{z-index:42;inset:auto 6px 6px;width:calc(100% - 12px);height:auto;max-height:calc(100dvh - 12px);padding:0;overflow:auto;border:1px solid var(--paper);background:rgba(4,8,7,.98)}.editor-head{height:40px;margin:0;padding:0 12px}.editor-head div{gap:12px;font-size:9px}.editor-head button{font-size:8px}.formula-editor>p{margin:7px 0;padding:0 12px;font-size:8px;line-height:1.4}.code-area{display:block;margin:7px 12px;padding:8px}.code-area span{display:none}.code-area textarea{width:100%;min-height:78px;padding:0;font-size:10px}.formula-presets{display:flex!important;gap:5px;padding:0 12px;overflow-x:auto;flex-wrap:nowrap}.formula-presets>span{flex:0 0 auto}.formula-presets button{flex:0 0 auto;padding:5px 7px}.formula-presets button code{display:inline}.editor-actions{padding:7px 12px}.editor-actions button{padding:8px 11px;font-size:8px}
 }
+
+/* Keep the resting thumb centered after the landscape size overrides above. */
+@media (orientation:landscape) and (any-pointer:coarse){
+  .joystick i{left:50%!important;top:50%!important;margin:-11px 0 0 -11px!important}
+}
