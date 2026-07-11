@@ -1,4 +1,4 @@
-name: Deploy Fractal Drift to Pages
+name: Build Fractal Drift for Pages
 
 on:
   push:
@@ -6,23 +6,20 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
+  group: pages-source
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-publish:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Use GitHub Actions as the Pages source
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method PUT "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow
+        with:
+          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -33,20 +30,16 @@ jobs:
         env:
           GITHUB_PAGES: "true"
           NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: out
-
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Publish the static export into the Pages branch source
+        shell: bash
+        run: |
+          rm -rf _next 404 _not-found
+          rm -f index.html index.txt 404.html .nojekyll __next.*.txt
+          cp -R out/. .
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          while IFS= read -r -d '' file; do
+            git add -f -- "${file#out/}"
+          done < <(find out -type f -print0)
+          git commit -m "Publish Fractal Drift static build [skip ci]" || exit 0
+          git push origin main
