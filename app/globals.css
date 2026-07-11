@@ -59,9 +59,10 @@
 }
 
 @media (max-width:720px){
-  .switches{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .switches{grid-template-columns:repeat(2,minmax(0,1fr))!important}
   .switches button{min-width:0;padding:0 6px;font-size:9px;border-right:1px solid var(--line);border-bottom:0!important}
-  .switches button:last-child{border-right:0}
+  .switches button:nth-child(2n){border-right:0}
+  .switches button:nth-child(-n+2){border-bottom:1px solid var(--line)!important}
   .switches button span{overflow-wrap:anywhere;text-align:left}
 }
 
