@@ -1,2 +1,2 @@
-:HL["/fractal-drift/_next/static/chunks/0a6~.imkn_.hf.css","style"]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}},"staleTime":300,"buildId":"rk_UPB0d2yMz-b8tRq0ML"}
+:HL["/fractal-drift/_next/static/chunks/0rt3s2j4wx765.css","style"]
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}},"staleTime":300,"buildId":"ioGDs9G07T7UXiXeFikLD"}
