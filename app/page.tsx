@@ -9,7 +9,10 @@ type Settings = {
   detail: number;
   shadows: boolean;
   volumetric: boolean;
+  bands: boolean;
 };
+
+type MobileMove = { pointerId: number | null; x: number; z: number };
 
 const WORLDS = [
   { name: "MANDELBOX", code: "01", formula: "boxFold(p) · scale − offset" },
@@ -38,6 +41,7 @@ uniform float uDistance;
 uniform float uDetail;
 uniform float uShadows;
 uniform float uVolumetric;
+uniform float uBands;
 uniform int uWorld;
 uniform vec3 uCamera;
 uniform mat3 uRotation;
@@ -194,7 +198,8 @@ void main(){
     float sh=mix(1.,softShadow(p+n*.01,light,.02,8.),uShadows);
     float edge=pow(1.-abs(dot(n,-rd)),2.2);
     float bands=.5+.5*sin((p.x+p.y+p.z)*3.2+uTime*.22);
-    col=palette(.25+.5*dif+.25*bands)*(0.12+dif*sh*.82)+palette(1.)*edge*.35;
+    float surfaceTone=mix(.5,bands,uBands);
+    col=palette(.25+.5*dif+.25*surfaceTone)*(0.12+dif*sh*.82)+palette(1.)*edge*.35;
     if(uWorld==4){ float cheese=smoothstep(.0,.18,abs(fract((p.x+p.y)*.7)-.5)); col*=mix(vec3(1.,.36,.08),vec3(1.,.82,.24),cheese); }
     col*=exp(-t*.018);
   }
@@ -219,11 +224,11 @@ function compileShader(gl: WebGL2RenderingContext, type: number, source: string)
   return shader;
 }
 
-function FractalCanvas({ world, settings, customExpression, onStats }: {
-  world: number; settings: Settings; customExpression: string; onStats: (fps: number, pos: number[], rot: number[]) => void;
+function FractalCanvas({ world, settings, customExpression, mobileMoveRef, onStats }: {
+  world: number; settings: Settings; customExpression: string; mobileMoveRef: { current: MobileMove }; onStats: (fps: number, pos: number[], rot: number[]) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const stateRef = useRef({ world, settings, yaw: 0, pitch: 0, pos: [0, 0, -4] as number[], keys: new Set<string>(), touchLook: null as null | {id:number,x:number,y:number}, touchMove: null as null | {id:number,x:number,y:number,dx:number,dy:number} });
+  const stateRef = useRef({ world, settings, yaw: 0, pitch: 0, pos: [0, 0, -4] as number[], keys: new Set<string>(), touchLook: null as null | {id:number,x:number,y:number} });
   useEffect(() => { stateRef.current.world = world; stateRef.current.settings = settings; }, [world, settings]);
 
   useEffect(() => {
@@ -242,19 +247,19 @@ function FractalCanvas({ world, settings, customExpression, onStats }: {
     gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
     const loc=gl.getAttribLocation(program,"position"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
     const uni=(name:string)=>gl.getUniformLocation(program,name);
-    const U={res:uni("uResolution"),time:uni("uTime"),fov:uni("uFov"),distance:uni("uDistance"),detail:uni("uDetail"),shadows:uni("uShadows"),vol:uni("uVolumetric"),world:uni("uWorld"),camera:uni("uCamera"),rotation:uni("uRotation")};
+    const U={res:uni("uResolution"),time:uni("uTime"),fov:uni("uFov"),distance:uni("uDistance"),detail:uni("uDetail"),shadows:uni("uShadows"),vol:uni("uVolumetric"),bands:uni("uBands"),world:uni("uWorld"),camera:uni("uCamera"),rotation:uni("uRotation")};
     let frame=0,last=performance.now(),fps=60,raf=0;
-    const resize=()=>{ const dpr=Math.min(devicePixelRatio,settings.detail>.7?1.7:1.25); const w=Math.floor(canvas.clientWidth*dpr),h=Math.floor(canvas.clientHeight*dpr); if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);} };
+    const resize=()=>{ const dpr=Math.min(devicePixelRatio,stateRef.current.settings.detail>.7?1.7:1.25); const w=Math.floor(canvas.clientWidth*dpr),h=Math.floor(canvas.clientHeight*dpr); if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);} };
     const render=(now:number)=>{
       resize(); const s=stateRef.current,dt=Math.min((now-last)/1000,.05); last=now;
       const cp=Math.cos(s.pitch),sp=Math.sin(s.pitch),cy=Math.cos(s.yaw),sy=Math.sin(s.yaw);
       const forward=[sy*cp,-sp,cy*cp],right=[cy,0,-sy],up=[sy*sp,cp,cy*sp];
       let mx=0,my=0,mz=0; if(s.keys.has("KeyW"))mz++; if(s.keys.has("KeyS"))mz--; if(s.keys.has("KeyD"))mx++; if(s.keys.has("KeyA"))mx--; if(s.keys.has("Space"))my++; if(s.keys.has("KeyC"))my--;
-      if(s.touchMove){ mx+=Math.max(-1,Math.min(1,s.touchMove.dx/42)); mz+=Math.max(-1,Math.min(1,-s.touchMove.dy/42)); }
+      mx+=mobileMoveRef.current.x; mz+=mobileMoveRef.current.z;
       const boost=s.keys.has("ShiftLeft")||s.keys.has("ShiftRight")?3:1, vel=s.settings.speed*.06*boost;
       for(let i=0;i<3;i++) s.pos[i]+=(forward[i]*mz+right[i]*mx+(i===1?my:0))*vel*dt;
       const mat=new Float32Array([right[0],right[1],right[2],up[0],up[1],up[2],forward[0],forward[1],forward[2]]);
-      gl.useProgram(program); gl.uniform2f(U.res,canvas.width,canvas.height); gl.uniform1f(U.time,now/1000); gl.uniform1f(U.fov,s.settings.fov); gl.uniform1f(U.distance,s.settings.distance); gl.uniform1f(U.detail,s.settings.detail); gl.uniform1f(U.shadows,s.settings.shadows?1:0); gl.uniform1f(U.vol,s.settings.volumetric?1:0); gl.uniform1i(U.world,s.world); gl.uniform3f(U.camera,s.pos[0],s.pos[1],s.pos[2]); gl.uniformMatrix3fv(U.rotation,false,mat); gl.drawArrays(gl.TRIANGLES,0,3);
+      gl.useProgram(program); gl.uniform2f(U.res,canvas.width,canvas.height); gl.uniform1f(U.time,now/1000); gl.uniform1f(U.fov,s.settings.fov); gl.uniform1f(U.distance,s.settings.distance); gl.uniform1f(U.detail,s.settings.detail); gl.uniform1f(U.shadows,s.settings.shadows?1:0); gl.uniform1f(U.vol,s.settings.volumetric?1:0); gl.uniform1f(U.bands,s.settings.bands?1:0); gl.uniform1i(U.world,s.world); gl.uniform3f(U.camera,s.pos[0],s.pos[1],s.pos[2]); gl.uniformMatrix3fv(U.rotation,false,mat); gl.drawArrays(gl.TRIANGLES,0,3);
       frame++; if(frame%20===0){fps=Math.round(1/Math.max(dt,.001));onStats(fps,s.pos,[s.pitch,s.yaw]);}
       raf=requestAnimationFrame(render);
     };
@@ -264,16 +269,25 @@ function FractalCanvas({ world, settings, customExpression, onStats }: {
     const touchStart=(e:TouchEvent)=>{for(const t of Array.from(e.changedTouches)){if(!stateRef.current.touchLook)stateRef.current.touchLook={id:t.identifier,x:t.clientX,y:t.clientY};}};
     const touchMove=(e:TouchEvent)=>{for(const t of Array.from(e.touches)){const look=stateRef.current.touchLook;if(look&&t.identifier===look.id){const dx=t.clientX-look.x,dy=t.clientY-look.y;stateRef.current.yaw+=dx*.006;stateRef.current.pitch=Math.max(-1.5,Math.min(1.5,stateRef.current.pitch+dy*.006));stateRef.current.touchLook={id:look.id,x:t.clientX,y:t.clientY};}}e.preventDefault();};
     const touchEnd=(e:TouchEvent)=>{for(const t of Array.from(e.changedTouches)){if(stateRef.current.touchLook?.id===t.identifier)stateRef.current.touchLook=null;}};
-    const stick=document.querySelector<HTMLElement>(".joystick"),knob=stick?.querySelector<HTMLElement>("i");
-    let stickPointer:number|null=null;
-    const moveStick=(e:PointerEvent)=>{if(!stick||stickPointer!==e.pointerId)return;const r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;let dx=e.clientX-cx,dy=e.clientY-cy;const max=r.width*.32,len=Math.hypot(dx,dy);if(len>max){dx=dx/len*max;dy=dy/len*max;}stateRef.current.touchMove={id:e.pointerId,x:cx,y:cy,dx:dx/max*42,dy:dy/max*42};if(knob)knob.style.transform=`translate(${dx}px,${dy}px)`;e.preventDefault();e.stopPropagation();};
-    const stickDown=(e:PointerEvent)=>{stickPointer=e.pointerId;stick?.setPointerCapture(e.pointerId);moveStick(e);};
-    const stickUp=(e:PointerEvent)=>{if(stickPointer!==e.pointerId)return;stickPointer=null;stateRef.current.touchMove=null;if(knob)knob.style.transform="translate(0,0)";e.preventDefault();e.stopPropagation();};
-    stick?.addEventListener("pointerdown",stickDown);stick?.addEventListener("pointermove",moveStick);stick?.addEventListener("pointerup",stickUp);stick?.addEventListener("pointercancel",stickUp);
     canvas.onclick=()=>canvas.requestPointerLock?.(); window.addEventListener("keydown",keyDown);window.addEventListener("keyup",keyUp);window.addEventListener("mousemove",mouse);canvas.addEventListener("wheel",wheel,{passive:true});canvas.addEventListener("touchstart",touchStart,{passive:true});canvas.addEventListener("touchmove",touchMove,{passive:false});canvas.addEventListener("touchend",touchEnd);raf=requestAnimationFrame(render);
-    return()=>{cancelAnimationFrame(raf);window.removeEventListener("keydown",keyDown);window.removeEventListener("keyup",keyUp);window.removeEventListener("mousemove",mouse);canvas.removeEventListener("wheel",wheel);canvas.removeEventListener("touchstart",touchStart);canvas.removeEventListener("touchmove",touchMove);canvas.removeEventListener("touchend",touchEnd);stick?.removeEventListener("pointerdown",stickDown);stick?.removeEventListener("pointermove",moveStick);stick?.removeEventListener("pointerup",stickUp);stick?.removeEventListener("pointercancel",stickUp);gl.deleteProgram(program);};
-  }, [customExpression]);
+    return()=>{cancelAnimationFrame(raf);window.removeEventListener("keydown",keyDown);window.removeEventListener("keyup",keyUp);window.removeEventListener("mousemove",mouse);canvas.removeEventListener("wheel",wheel);canvas.removeEventListener("touchstart",touchStart);canvas.removeEventListener("touchmove",touchMove);canvas.removeEventListener("touchend",touchEnd);gl.deleteProgram(program);};
+  }, [customExpression, mobileMoveRef, onStats]);
   return <canvas ref={canvasRef} className={`fractal-canvas world-${world}`} aria-label="Interactive three-dimensional fractal world" />;
+}
+
+function MobileJoystick({ inputRef }: { inputRef: { current: MobileMove } }) {
+  const move=(e:React.PointerEvent<HTMLDivElement>)=>{
+    if(inputRef.current.pointerId!==e.pointerId)return;
+    const stick=e.currentTarget,r=stick.getBoundingClientRect(),max=Math.max(1,r.width*.32);
+    let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);
+    const length=Math.hypot(dx,dy);if(length>max){dx=dx/length*max;dy=dy/length*max;}
+    inputRef.current.x=dx/max;inputRef.current.z=-dy/max;
+    const knob=stick.querySelector<HTMLElement>("i");if(knob)knob.style.transform=`translate3d(${dx}px,${dy}px,0)`;
+    e.preventDefault();e.stopPropagation();
+  };
+  const start=(e:React.PointerEvent<HTMLDivElement>)=>{inputRef.current.pointerId=e.pointerId;e.currentTarget.setPointerCapture(e.pointerId);move(e);};
+  const stop=(e:React.PointerEvent<HTMLDivElement>)=>{if(inputRef.current.pointerId!==e.pointerId)return;inputRef.current={pointerId:null,x:0,z:0};const knob=e.currentTarget.querySelector<HTMLElement>("i");if(knob)knob.style.transform="translate3d(0,0,0)";e.preventDefault();e.stopPropagation();};
+  return <div className="joystick" onPointerDown={start} onPointerMove={move} onPointerUp={stop} onPointerCancel={stop}><i/></div>;
 }
 
 function Range({ label, value, min, max, step, display, onChange }: { label:string; value:number; min:number; max:number; step:number; display:string; onChange:(v:number)=>void }) {
@@ -281,6 +295,7 @@ function Range({ label, value, min, max, step, display, onChange }: { label:stri
 }
 
 export default function Home() {
+  const mobileMoveRef=useRef<MobileMove>({pointerId:null,x:0,z:0});
   const [world,setWorld]=useState(0);
   const [panel,setPanel]=useState(false);
   const [hud,setHud]=useState(false);
@@ -292,7 +307,7 @@ export default function Home() {
   const [formulaError,setFormulaError]=useState("");
   const [custom,setCustom]=useState(false);
   const [stats,setStats]=useState({fps:60,pos:[0,0,-4],rot:[0,0]});
-  const [settings,setSettings]=useState<Settings>({speed:12.4,distance:42,fov:70,detail:.66,shadows:true,volumetric:true});
+  const [settings,setSettings]=useState<Settings>({speed:12.4,distance:42,fov:70,detail:.66,shadows:true,volumetric:true,bands:true});
   const update=<K extends keyof Settings>(key:K,value:Settings[K])=>setSettings(s=>({...s,[key]:value}));
   const onStats=useCallback((fps:number,pos:number[],rot:number[])=>setStats({fps,pos:[...pos],rot:[...rot]}),[]);
   const compile=()=>{
@@ -308,8 +323,8 @@ export default function Home() {
   const toggleFullscreen=async()=>{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();};
 
   return <main className={`app-shell ${panel?"":"panel-hidden"} ${hud?"":"hud-hidden"}`}>
-    <FractalCanvas world={custom?9:world} settings={settings} customExpression={compiled} onStats={onStats}/>
-    <div className="scanlines" />
+    <FractalCanvas world={custom?9:world} settings={settings} customExpression={compiled} mobileMoveRef={mobileMoveRef} onStats={onStats}/>
+    {settings.bands&&<div className="scanlines" />}
     <header className="identity">
       <div className="eyebrow"><span>REALTIME FRACTAL NAVIGATOR</span><span>/ {custom?"ƒ":WORLDS[world].code}</span></div>
       <h1>FRACTAL<br/>DRIFT</h1>
@@ -337,6 +352,7 @@ export default function Home() {
       <div className="switches">
         <button onClick={()=>update("shadows",!settings.shadows)}><span>SHADOWS</span><i className={settings.shadows?"on":""}/></button>
         <button onClick={()=>update("volumetric",!settings.volumetric)}><span>VOLUMETRIC</span><i className={settings.volumetric?"on":""}/></button>
+        <button onClick={()=>update("bands",!settings.bands)}><span>SURFACE BANDS</span><i className={settings.bands?"on":""}/></button>
       </div>
       <button className="formula-trigger" onClick={()=>setFormulaOpen(true)}><span>ƒ</span><b>CUSTOM FORMULA</b><i>↗</i></button>
       <code className="formula-preview">{custom?compiled:WORLDS[world].formula}</code>
@@ -351,7 +367,7 @@ export default function Home() {
       <div className="speed-readout"><small>SPEED</small><strong>{settings.speed.toFixed(1)}</strong><em>×</em></div>
     </footer>
 
-    <div className="touch-controls" aria-hidden="true"><div className="joystick"><i/></div><div className="touch-look">DRAG<br/>TO LOOK</div></div>
+    <div className="touch-controls"><MobileJoystick inputRef={mobileMoveRef}/><div className="touch-look" aria-hidden="true">DRAG<br/>TO LOOK</div></div>
 
     <div className={`formula-editor ${formulaOpen?"open":""}`} role="dialog" aria-modal="true" aria-label="Custom distance field formula">
       <div className="editor-head"><div><span>ƒ / FIELD COMPILER</span><small>GLSL EXPRESSION</small></div><button onClick={()=>setFormulaOpen(false)}>CLOSE [ESC]</button></div>
