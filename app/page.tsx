@@ -55,6 +55,7 @@ float sdTorus(vec3 p,vec2 t){ vec2 q=vec2(length(p.xz)-t.x,p.y); return length(q
 float mandelbox(vec3 p){
   vec3 z=p; float scale=2.55; float dr=1.;
   for(int i=0;i<7;i++){
+    if(uBands<.5&&i>=3) break;
     z=clamp(z,-1.,1.)*2.-z;
     float r2=dot(z,z);
     float k=clamp(max(1.0/r2,1.0),1.0,4.0);
@@ -86,7 +87,7 @@ float organic(vec3 p){
   vec3 q=sin(p*1.35+sin(p.zxy*.7+uTime*.09));
   float shell=abs(length(q)-1.02)-.075;
   float vein=length(sin(p.xy*2.4+sin(p.z)*.8))-.22;
-  return min(shell,vein*.55);
+  return uBands<.5?shell:min(shell,vein*.55);
 }
 
 float pizza(vec3 p){
@@ -113,6 +114,7 @@ float cathedral(vec3 p){
 float menger(vec3 p){
   float d=sdBox(p,vec3(2.2)); float s=1.;
   for(int i=0;i<5;i++){
+    if(uBands<.5&&i>=2) break;
     vec3 a=mod(p*s+1.,2.)-1.; s*=3.;
     vec3 r=abs(1.-3.*abs(a));
     float c=(min(max(r.x,r.y),min(max(r.y,r.z),max(r.z,r.x)))-1.)/s;
@@ -276,18 +278,21 @@ function FractalCanvas({ world, settings, customExpression, mobileMoveRef, onSta
 }
 
 function MobileJoystick({ inputRef }: { inputRef: { current: MobileMove } }) {
-  const move=(e:React.PointerEvent<HTMLDivElement>)=>{
-    if(inputRef.current.pointerId!==e.pointerId)return;
-    const stick=e.currentTarget,r=stick.getBoundingClientRect(),max=Math.max(1,r.width*.32);
-    let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);
+  const applyPoint=(stick:HTMLDivElement,clientX:number,clientY:number)=>{
+    const r=stick.getBoundingClientRect(),max=Math.max(1,r.width*.32);
+    let dx=clientX-(r.left+r.width/2),dy=clientY-(r.top+r.height/2);
     const length=Math.hypot(dx,dy);if(length>max){dx=dx/length*max;dy=dy/length*max;}
     inputRef.current.x=dx/max;inputRef.current.z=-dy/max;
     const knob=stick.querySelector<HTMLElement>("i");if(knob)knob.style.transform=`translate3d(${dx}px,${dy}px,0)`;
-    e.preventDefault();e.stopPropagation();
   };
-  const start=(e:React.PointerEvent<HTMLDivElement>)=>{inputRef.current.pointerId=e.pointerId;e.currentTarget.setPointerCapture(e.pointerId);move(e);};
-  const stop=(e:React.PointerEvent<HTMLDivElement>)=>{if(inputRef.current.pointerId!==e.pointerId)return;inputRef.current={pointerId:null,x:0,z:0};const knob=e.currentTarget.querySelector<HTMLElement>("i");if(knob)knob.style.transform="translate3d(0,0,0)";e.preventDefault();e.stopPropagation();};
-  return <div className="joystick" onPointerDown={start} onPointerMove={move} onPointerUp={stop} onPointerCancel={stop}><i/></div>;
+  const reset=(stick:HTMLDivElement)=>{inputRef.current={pointerId:null,x:0,z:0};const knob=stick.querySelector<HTMLElement>("i");if(knob)knob.style.transform="translate3d(0,0,0)";};
+  const pointerStart=(e:React.PointerEvent<HTMLDivElement>)=>{if(e.pointerType==="touch")return;inputRef.current.pointerId=e.pointerId;e.currentTarget.setPointerCapture(e.pointerId);applyPoint(e.currentTarget,e.clientX,e.clientY);e.preventDefault();e.stopPropagation();};
+  const pointerMove=(e:React.PointerEvent<HTMLDivElement>)=>{if(e.pointerType==="touch"||inputRef.current.pointerId!==e.pointerId)return;applyPoint(e.currentTarget,e.clientX,e.clientY);e.preventDefault();e.stopPropagation();};
+  const pointerStop=(e:React.PointerEvent<HTMLDivElement>)=>{if(e.pointerType==="touch"||inputRef.current.pointerId!==e.pointerId)return;reset(e.currentTarget);e.preventDefault();e.stopPropagation();};
+  const touchStart=(e:React.TouchEvent<HTMLDivElement>)=>{const t=e.changedTouches[0];if(!t)return;inputRef.current.pointerId=t.identifier;applyPoint(e.currentTarget,t.clientX,t.clientY);e.preventDefault();e.stopPropagation();};
+  const touchMove=(e:React.TouchEvent<HTMLDivElement>)=>{const t=Array.from(e.touches).find(x=>x.identifier===inputRef.current.pointerId);if(!t)return;applyPoint(e.currentTarget,t.clientX,t.clientY);e.preventDefault();e.stopPropagation();};
+  const touchStop=(e:React.TouchEvent<HTMLDivElement>)=>{if(!Array.from(e.changedTouches).some(x=>x.identifier===inputRef.current.pointerId))return;reset(e.currentTarget);e.preventDefault();e.stopPropagation();};
+  return <div className="joystick" onPointerDown={pointerStart} onPointerMove={pointerMove} onPointerUp={pointerStop} onPointerCancel={pointerStop} onTouchStart={touchStart} onTouchMove={touchMove} onTouchEnd={touchStop} onTouchCancel={touchStop}><i/></div>;
 }
 
 function Range({ label, value, min, max, step, display, onChange }: { label:string; value:number; min:number; max:number; step:number; display:string; onChange:(v:number)=>void }) {
@@ -352,7 +357,7 @@ export default function Home() {
       <div className="switches">
         <button onClick={()=>update("shadows",!settings.shadows)}><span>SHADOWS</span><i className={settings.shadows?"on":""}/></button>
         <button onClick={()=>update("volumetric",!settings.volumetric)}><span>VOLUMETRIC</span><i className={settings.volumetric?"on":""}/></button>
-        <button onClick={()=>update("bands",!settings.bands)}><span>SURFACE BANDS</span><i className={settings.bands?"on":""}/></button>
+        <button onClick={()=>update("bands",!settings.bands)}><span>FRACTAL DETAIL</span><i className={settings.bands?"on":""}/></button>
       </div>
       <button className="formula-trigger" onClick={()=>setFormulaOpen(true)}><span>ƒ</span><b>CUSTOM FORMULA</b><i>↗</i></button>
       <code className="formula-preview">{custom?compiled:WORLDS[world].formula}</code>
