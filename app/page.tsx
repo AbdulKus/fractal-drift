@@ -55,7 +55,6 @@ float sdTorus(vec3 p,vec2 t){ vec2 q=vec2(length(p.xz)-t.x,p.y); return length(q
 float mandelbox(vec3 p){
   vec3 z=p; float scale=2.55; float dr=1.;
   for(int i=0;i<7;i++){
-    if(uBands<.5&&i>=3) break;
     z=clamp(z,-1.,1.)*2.-z;
     float r2=dot(z,z);
     float k=clamp(max(1.0/r2,1.0),1.0,4.0);
@@ -87,7 +86,7 @@ float organic(vec3 p){
   vec3 q=sin(p*1.35+sin(p.zxy*.7+uTime*.09));
   float shell=abs(length(q)-1.02)-.075;
   float vein=length(sin(p.xy*2.4+sin(p.z)*.8))-.22;
-  return uBands<.5?shell:min(shell,vein*.55);
+  return min(shell,vein*.55);
 }
 
 float pizza(vec3 p){
@@ -114,7 +113,6 @@ float cathedral(vec3 p){
 float menger(vec3 p){
   float d=sdBox(p,vec3(2.2)); float s=1.;
   for(int i=0;i<5;i++){
-    if(uBands<.5&&i>=2) break;
     vec3 a=mod(p*s+1.,2.)-1.; s*=3.;
     vec3 r=abs(1.-3.*abs(a));
     float c=(min(max(r.x,r.y),min(max(r.y,r.z),max(r.z,r.x)))-1.)/s;
@@ -197,11 +195,12 @@ void main(){
     vec3 p=ro+rd*t,n=normal(p);
     vec3 light=normalize(vec3(.5,.8,-.7));
     float dif=max(dot(n,light),0.);
-    float sh=mix(1.,softShadow(p+n*.01,light,.02,8.),uShadows);
+    float sh=mix(1.,softShadow(p+n*.01,light,.02,8.),uShadows*uBands);
     float edge=pow(1.-abs(dot(n,-rd)),2.2);
     float bands=.5+.5*sin((p.x+p.y+p.z)*3.2+uTime*.22);
-    float surfaceTone=mix(.5,bands,uBands);
-    col=palette(.25+.5*dif+.25*surfaceTone)*(0.12+dif*sh*.82)+palette(1.)*edge*.35;
+    float paletteTone=mix(.55,.25+.5*dif+.25*bands,uBands);
+    float lighting=mix(.72,.12+dif*sh*.82,uBands);
+    col=palette(paletteTone)*lighting+palette(1.)*edge*.35*uBands;
     if(uWorld==4){ float cheese=smoothstep(.0,.18,abs(fract((p.x+p.y)*.7)-.5)); col*=mix(vec3(1.,.36,.08),vec3(1.,.82,.24),cheese); }
     col*=exp(-t*.018);
   }
@@ -357,7 +356,7 @@ export default function Home() {
       <div className="switches">
         <button onClick={()=>update("shadows",!settings.shadows)}><span>SHADOWS</span><i className={settings.shadows?"on":""}/></button>
         <button onClick={()=>update("volumetric",!settings.volumetric)}><span>VOLUMETRIC</span><i className={settings.volumetric?"on":""}/></button>
-        <button onClick={()=>update("bands",!settings.bands)}><span>FRACTAL DETAIL</span><i className={settings.bands?"on":""}/></button>
+        <button onClick={()=>update("bands",!settings.bands)}><span>DARK CONTOURS</span><i className={settings.bands?"on":""}/></button>
       </div>
       <button className="formula-trigger" onClick={()=>setFormulaOpen(true)}><span>ƒ</span><b>CUSTOM FORMULA</b><i>↗</i></button>
       <code className="formula-preview">{custom?compiled:WORLDS[world].formula}</code>
