@@ -50,7 +50,19 @@
   .formula-editor,.panel-hidden .formula-editor,.hud-hidden .formula-editor{inset:6px;width:calc(100% - 12px);height:calc(100% - 12px);padding:0;overflow:auto;border:1px solid var(--paper)}.editor-head{height:42px}.code-area{margin-block:7px}.code-area textarea{min-height:70px}.formula-presets{display:none}.editor-actions{padding-block:7px}
 }
 
-.formula-presets button{display:flex;align-items:center;gap:7px}.formula-presets button b{font-size:8px;font-weight:500;color:var(--paper)}.formula-presets button code{font-size:8px;color:#7c8882}.touch-controls{pointer-events:none}.joystick{pointer-events:auto;touch-action:none;user-select:none}.joystick i{transition:transform .04s linear;will-change:transform}
+.formula-presets button{display:flex;align-items:center;gap:7px}.formula-presets button b{font-size:8px;font-weight:500;color:var(--paper)}.formula-presets button code{font-size:8px;color:#7c8882}.touch-controls{pointer-events:none}.joystick{pointer-events:auto;touch-action:none;user-select:none;overscroll-behavior:none}.joystick i{pointer-events:none;transition:transform .04s linear;will-change:transform}
+
+@media (any-pointer:coarse){
+  .touch-controls{display:block}
+  .joystick{position:fixed!important;z-index:23!important;opacity:1!important;visibility:visible!important;border-color:rgba(232,233,228,.5)!important;background:rgba(2,7,7,.48)!important;box-shadow:0 0 0 1px rgba(0,0,0,.4),0 8px 30px rgba(0,0,0,.3)}
+}
+
+@media (max-width:720px){
+  .switches{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .switches button{min-width:0;padding:0 6px;font-size:9px;border-right:1px solid var(--line);border-bottom:0!important}
+  .switches button:last-child{border-right:0}
+  .switches button span{overflow-wrap:anywhere;text-align:left}
+}
 
 /* Wide phone landscape. Kept independent from the portrait width breakpoint. */
 @media (orientation:landscape) and (max-height:720px) and (any-pointer:coarse){
